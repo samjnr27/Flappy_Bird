@@ -1,0 +1,3 @@
+C:/Users/samim/OneDrive/Desktop/Flappy_bird/build/CMakeFiles/FlappyBird.dir
+C:/Users/samim/OneDrive/Desktop/Flappy_bird/build/CMakeFiles/edit_cache.dir
+C:/Users/samim/OneDrive/Desktop/Flappy_bird/build/CMakeFiles/rebuild_cache.dir
