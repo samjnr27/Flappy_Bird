@@ -5,153 +5,140 @@
 #include <ctime>
 
 int main() {
-    // ─── 1) Création de la fenêtre (800×600, titre, style par défaut) ───────
+    // 1) Création de la fenêtre
     sf::RenderWindow window(
-        sf::VideoMode({800u, 600u}), 
-        "Flappy Bird", 
+        sf::VideoMode(sf::Vector2u{800, 600}),
+        "Flappy Bird",
         sf::Style::Default
     );
 
-    // ─── 2) Chargement de la texture et création du sprite de l’oiseau ─────
-    sf::Texture birdTexture;
-    if (!birdTexture.loadFromFile("./assets/bird.png")) {
-        // Si l'image n'est pas trouvée, on quitte
+    // 2) Fond unique
+    sf::Texture bgTexture;
+    if (!bgTexture.loadFromFile("./assets/ground.jpg"))
         return 1;
-    }
-    // Création du sprite à partir de la texture
-    sf::Sprite birdSprite(birdTexture);
-
-    // ─── 2a) Centre l’origine du sprite pour un déplacement/rotation symétrique
+    sf::Sprite bgSprite(bgTexture);
     {
-        auto texSizeF = static_cast<sf::Vector2f>(birdTexture.getSize());
-        birdSprite.setOrigin(texSizeF / 2.f);
+        auto ts = static_cast<sf::Vector2f>(bgTexture.getSize());
+        bgSprite.setScale({800.f/ts.x, 600.f/ts.y});
     }
 
-    // ─── 2b) Redimensionne le sprite pour qu’il fasse toujours 40×40 pixels
+    // 3) Oiseau
+    sf::Texture birdTexture;
+    if (!birdTexture.loadFromFile("./assets/bird.png"))
+        return 1;
+    sf::Sprite bird(birdTexture);
     {
-        auto texSize = birdTexture.getSize();  // sf::Vector2u { width, height }
-        const float desiredW = 40.f;
-        const float desiredH = 40.f;
-        float scaleX = desiredW / static_cast<float>(texSize.x);
-        float scaleY = desiredH / static_cast<float>(texSize.y);
-        birdSprite.setScale({ scaleX, scaleY });
+        auto szF = static_cast<sf::Vector2f>(birdTexture.getSize());
+        bird.setOrigin(szF/2.f);
+        const float D = 40.f;
+        auto szU = birdTexture.getSize();
+        bird.setScale({D/szU.x, D/szU.y});
     }
+    bird.setPosition({100.f,300.f});
 
-    birdSprite.setPosition({100.f, 300.f});  // position initiale
-
-    // ─── 3) Préparation du texte “Game Over” ────────────────────────────────
+    // 4) “Game Over”
     sf::Font font;
-    if (!font.openFromFile("C:/Windows/Fonts/arial.ttf")) {
-        return 1;  // quitte si la police ne se charge pas
-    }
-    sf::Text gameOverText(font, "Game Over!", 48u);
-    gameOverText.setFillColor(sf::Color::Red);
+    if (!font.openFromFile("./fonts/arial.ttf"))
+        return 1;
+    sf::Text gameOver(font, "Game Over!", 48u);
+    gameOver.setFillColor(sf::Color::Red);
     {
-        auto bounds = gameOverText.getLocalBounds();
-        gameOverText.setOrigin({bounds.size.x / 2, bounds.size.y / 2});
-        gameOverText.setPosition({400.f, 300.f});
+        auto b = gameOver.getLocalBounds();
+        gameOver.setOrigin({b.size.x/2.f, b.size.y/2.f});
+        gameOver.setPosition({400.f,300.f});
     }
 
-    // ─── 4) Variables de physique ────────────────────────────────────────────
-    float velocity         = 0.f;     // vitesse verticale (px/s)
-    const float gravity      = 800.f; // gravité (px/s²)
-    const float jumpStrength = -350.f;// impulsion de saut (px/s)
-    sf::Clock clock;                 // mesure du delta time
+    // 5) Physique & tuyaux
+    float velocity = 0.f;
+    const float gravity = 800.f;
+    const float jumpStrength = -350.f;
+    sf::Clock clock;
 
-    // ─── 5) Configuration des tuyaux ────────────────────────────────────────
-    struct Pipe {
-        sf::RectangleShape top, bottom;
-    };
-    std::vector<Pipe> pipes;         // stocke les tuyaux à l’écran
-    float spawnTimer        = 0.f;   // accumulateur pour spawn
-    const float spawnInterval = 1.5f;// secondes entre chaque spawn
-    const float pipeSpeed     = 200.f;// vitesse de défilement (px/s)
-    const float gapSize       = 150.f;// ouverture (px)
+    struct Pipe { sf::RectangleShape top, bottom; };
+    std::vector<Pipe> pipes;
+    float spawnTimer = 0.f;
+    const float spawnInterval = 1.5f;
+    const float pipeSpeed = 200.f;
+    const float gapSize = 150.f;
 
-    std::srand(static_cast<unsigned>(std::time(nullptr))); // seed aléatoire
+    std::srand((unsigned)std::time(nullptr));
 
-    // ─── 6) Boucle principale ────────────────────────────────────────────────
+    // 6) Boucle principale
     while (window.isOpen()) {
-        float dt = clock.restart().asSeconds(); // Δt depuis la dernière frame
+        float dt = clock.restart().asSeconds();
 
-        // a) Génération automatique des tuyaux
+        // a) Spawn tuyaux
         spawnTimer += dt;
         if (spawnTimer >= spawnInterval) {
             spawnTimer = 0.f;
-            float gapY = 100.f + std::rand() % 301; // Y du haut du gap (100–400)
+            float gapY = 100.f + std::rand()%301;
 
-            // tuyau supérieur
+            // ─── Tuyau du haut ───────────────────────────
             sf::RectangleShape top({60.f, gapY});
-            top.setFillColor(sf::Color(0,200,0));
+            top.setFillColor({0,200,0});             // vert clair
+            top.setOutlineColor({0,150,0});          // bordure vert foncé
+            top.setOutlineThickness(5.f);
             top.setPosition({800.f, 0.f});
 
-            // tuyau inférieur
-            sf::RectangleShape bottom({60.f, 600.f - (gapY + gapSize)});
-            bottom.setFillColor(sf::Color(0,200,0));
+            // ─── Tuyau du bas ────────────────────────────
+            float botH = 600.f - (gapY + gapSize);
+            sf::RectangleShape bottom({60.f, botH});
+            bottom.setFillColor({0,200,0});
+            bottom.setOutlineColor({0,150,0});
+            bottom.setOutlineThickness(5.f);
             bottom.setPosition({800.f, gapY + gapSize});
 
             pipes.push_back({top, bottom});
         }
 
-        // b) Détection : l’oiseau sort-il de la fenêtre ?
+        // b) Game Over si hors-écran
         {
-            auto pos = birdSprite.getPosition();
+            auto pos = bird.getPosition();
             if (pos.y < 0.f || pos.y > 600.f) {
-                // “Game Over”, pause puis reset complet
                 window.clear(sf::Color::Black);
-                window.draw(gameOverText);
+                window.draw(gameOver);
                 window.display();
                 sf::sleep(sf::seconds(2.f));
-
-                birdSprite.setPosition({100.f, 300.f});
+                bird.setPosition({100.f,300.f});
                 velocity = 0.f;
                 pipes.clear();
                 spawnTimer = 0.f;
                 clock.restart();
-                continue; // passe à l’itération suivante
+                continue;
             }
         }
 
-        // c) Gestion des événements (fermeture + saut)
-        while (auto event = window.pollEvent()) {
-            if (event->is<sf::Event::Closed>()) {
-                window.close();
-            }
-            else if (event->is<sf::Event::KeyPressed>()) {
-                auto key = event->getIf<sf::Event::KeyPressed>();
-                if (key && key->code == sf::Keyboard::Key::Space) {
+        // c) Événements
+        while (auto ev = window.pollEvent()) {
+            auto& e = *ev;
+            if (e.is<sf::Event::Closed>()) window.close();
+            else if (auto kp = e.getIf<sf::Event::KeyPressed>())
+                if (kp->code == sf::Keyboard::Key::Space)
                     velocity = jumpStrength;
-                }
-            }
         }
 
-        // d) Physique de l’oiseau (gravité + déplacement)
+        // d) Physique
         velocity += gravity * dt;
-        birdSprite.move({0.f, velocity * dt});
+        bird.move({0.f, velocity * dt});
 
-        // e) Défilement et nettoyage des tuyaux
+        // e) Défilement + nettoyage des tuyaux
         for (auto& p : pipes) {
-            p.top.move({-pipeSpeed * dt, 0.f});
-            p.bottom.move({-pipeSpeed * dt, 0.f});
+            p.top.move({-pipeSpeed*dt,0.f});
+            p.bottom.move({-pipeSpeed*dt,0.f});
         }
-        if (!pipes.empty() && pipes.front().top.getPosition().x + 60.f < 0.f) {
+        if (!pipes.empty() && pipes.front().top.getPosition().x + 60.f < 0.f)
             pipes.erase(pipes.begin());
-        }
 
-        // f) Détection de collision oiseau ↔ tuyaux
+        // f) Collision
         for (auto& p : pipes) {
-            bool hitTop = birdSprite.getGlobalBounds()
-                              .findIntersection(p.top.getGlobalBounds()).has_value();
-            bool hitBot = birdSprite.getGlobalBounds()
-                              .findIntersection(p.bottom.getGlobalBounds()).has_value();
-            if (hitTop || hitBot) {
-                // “Game Over” + reset
+            auto bb = bird.getGlobalBounds();
+            if (bb.findIntersection(p.top.getGlobalBounds()).has_value() ||
+                bb.findIntersection(p.bottom.getGlobalBounds()).has_value()) {
                 window.clear(sf::Color::Black);
-                window.draw(gameOverText);
+                window.draw(gameOver);
                 window.display();
                 sf::sleep(sf::seconds(2.f));
-
-                birdSprite.setPosition({100.f, 300.f});
+                bird.setPosition({100.f,300.f});
                 velocity = 0.f;
                 pipes.clear();
                 spawnTimer = 0.f;
@@ -160,13 +147,14 @@ int main() {
             }
         }
 
-        // g) Rendu final (fond, tuyaux, oiseau texturé)
-        window.clear(sf::Color(135,206,235)); // bleu ciel
-        for (auto& p : pipes) {
+        // g) Rendu
+        window.clear({135,206,235});     // bleu ciel
+        window.draw(bgSprite);          // sol de fond
+        for (auto& p : pipes) {         // tuyaux stylés
             window.draw(p.top);
             window.draw(p.bottom);
         }
-        window.draw(birdSprite);
+        window.draw(bird);              // oiseau
         window.display();
     }
 
